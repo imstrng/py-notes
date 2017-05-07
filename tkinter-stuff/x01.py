@@ -1,6 +1,6 @@
 from tkinter import *
 import subprocess as sub
-p = sub.Popen('./script',stdout=sub.PIPE,stderr=sub.PIPE)
+p = sub.Popen('vmstat',stdout=sub.PIPE,stderr=sub.PIPE)
 output, errors = p.communicate()
 
 root = Tk()

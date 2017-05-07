@@ -1,0 +1,31 @@
+{
+    "MD_AMS_ENX": {
+        "descr": "LinkDown",
+        "enable": "0",
+        "end": "",
+        "interval": "",
+        "last": "2017-05-07 12:15:45.284819",
+        "snooze": "",
+        "start": "",
+        "status": "ERROR",
+        "timeout": ""
+    },
+    "aap": {
+        "descr": "",
+        "enable": "0",
+        "end": "09:00",
+        "interval": "",
+        "last": "",
+        "start": "",
+        "status": ""
+    },
+    "noot": {
+        "descr": "",
+        "enable": "0",
+        "end": "",
+        "interval": "",
+        "last": "",
+        "start": "12:00",
+        "status": ""
+    }
+}
