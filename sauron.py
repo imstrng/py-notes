@@ -128,7 +128,7 @@ class Server(asyncio.Protocol):
 mon = readSettings()
 
 loop = asyncio.get_event_loop()
-coro = loop.create_server(Server, '0.0.0.0', 8080)
+coro = loop.create_server(Server, '0.0.0.0', 5000)
 server = loop.run_until_complete(coro)
 
 print('Listing on {}'.format(server.sockets[0].getsockname()))
