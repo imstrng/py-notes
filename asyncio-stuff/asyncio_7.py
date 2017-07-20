@@ -113,7 +113,6 @@ class Server(asyncio.Protocol):
                 else:
                     self.out = header + json.dumps({'status': 'error'}, indent=4, sort_keys=True) + '\n'
                     self.transport.write(self.out.encode())
-
         self.transport.close()
 
 
@@ -151,4 +150,11 @@ foreach ($json as $k => $v){
 <pre><?php #print_r($json['nl.aap.test1']); ?></pre>
 </body>
 </html>
+'''
+'''
+ssh user@remotehost 'bash -s' < remotescript.sh > logfile.log
+'''
+'''
+echo "nl.aap.test1 OK 1" > /dev/tcp/localhost/5000
+curl  localhost:5000/nl.aap.test1/enable/1
 '''
