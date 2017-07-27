@@ -9,7 +9,7 @@ mon = {}
 store_path='store'
 
 header = """HTTP/1.0 200 OK
-Content-Type: text/html
+Content-Type: application/json
 
 """
 
@@ -37,29 +37,23 @@ def store(topic, now, key, val):
     with open(store_path+'/'+now[:10]+'_'+topic+'.log', 'a') as f:
             f.write(now+' '+key+' '+val+'\n')
 
-
 def itemInit(topic):
     if topic not in mon:
-        mon.update({topic : {'enable':'0', 'start':'', 'end':'', 'snooze': '', 'interval':'', 'last':'', 'status':'', 'descr':'','timeout':'', 'reporter':''}})
-
+        mon.update({topic : {'enable':'0', 'start':'', 'end':'', 'snooze': '', 'interval':'', 'last':'', 'status':'', 'descr':'','timeout':'', 'reporter':'', 'href':''}})
 
 def itemUpdateStatus(topic, now, key, val, reporter):
     itemInit(topic)
     mon[topic].update({'last': now, 'status': key, 'desc': val, 'reporter': reporter})
     store(topic, now, key, val)
 
-
 def itemUpdateParams(topic, now, key, val):
     itemInit(topic)
     mon[topic].update({key: val})
     store(topic, now, key, val)
 
-
 def getAlerts():
     out = mon
     return out
-
-
 
 class Server(asyncio.Protocol):
 
@@ -80,7 +74,7 @@ class Server(asyncio.Protocol):
         if self.key in ['ERROR','WARN','OK']:
             itemUpdateStatus(self.topic, self.now, self.key, self.val, self.reporter)
 
-        elif self.key in ['enable','start','end','snooze','interval','timeout']:
+        elif self.key in ['enable','start','end','snooze','interval','timeout','descr','href']:
             itemUpdateParams(self.topic, self.now, self.key, self.val)
 
         elif self.topic in ['GET']:
@@ -98,13 +92,13 @@ class Server(asyncio.Protocol):
                     return
 
                 if self.topic in mon:
-                    if self.key in ['enable','start','end','snooze','interval','timeout']:
+                    if self.key in ['enable','start','end','snooze','interval','timeout','descr','href']:
                         itemUpdateParams(self.topic, self.now, self.key, self.val)
                         self.out = header + json.dumps({'status': 'ok'}, indent=4, sort_keys=True) + '\n'
                         self.transport.write(self.out.encode())
-                    
-                    elif self.key in ['enable','start','end','snooze','interval','timeout']:
-                        itemUpdateParams(self.topic, self.now, self.key, self.val)
+
+                    elif self.key in ['ERROR','WARN','OK']:
+                        itemUpdateStatus(self.topic, self.now, self.key, self.val, self.reporter)
                         self.out = header + json.dumps({'status': 'ok'}, indent=4, sort_keys=True) + '\n'
                         self.transport.write(self.out.encode())
                     else:
@@ -130,13 +124,12 @@ if __name__ == '__main__':
     loop.run_until_complete(server.wait_closed())
     loop.close()
 
-
 '''
 <html>
 <body>
 <table border=1>
 <?php
-$json = file_get_contents('http://amam1w211:5000');
+$json = file_get_contents('http://hostname:5000');
 $json = json_decode($json, true);
 foreach ($json as $k => $v){
    echo '<tr>';
@@ -146,15 +139,38 @@ foreach ($json as $k => $v){
    echo '</tr>';
 }
 ?>
+'''
+'''
 </table>
-<pre><?php #print_r($json['nl.aap.test1']); ?></pre>
-</body>
+<pre><?php #print_r($json['nl.aap.test1']); ?></pre> </body>
 </html>
 '''
 '''
 ssh user@remotehost 'bash -s' < remotescript.sh > logfile.log
-'''
-'''
 echo "nl.aap.test1 OK 1" > /dev/tcp/localhost/5000
 curl  localhost:5000/nl.aap.test1/enable/1
+'''
+'''
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>sparkpug</title>
+<script src="jquery-3.2.1.min.js"></script>
+<script>
+function refresh_result1() {
+  $( "#result1" ).load( "table.php" );
+} 
+function refresh_result2() {
+  $( "#result2" ).load( "table.php" );
+} 
+window.setInterval(refresh_result1, 200);
+window.setInterval(refresh_result2, 4000);
+</script>
+</head>
+<body>
+<div id="result1"></div>
+<div id="result2"></div>
+</body>
+</html>
 '''
