@@ -2,12 +2,12 @@
 
 import asyncio
 import os
-import time
+import datetime as dt
 import json
 import copy
 mon = {}
 
-store_path='store'
+store_path='/tmp/store'
 info_seconds = 120
 
 header = """HTTP/1.0 200 OK
@@ -34,17 +34,16 @@ def saveSettings(mon):
         pass
 
 def store(topic, now, key, val):
-    now = str(time.strftime('%Y-%m-%d', time.localtime(int(now))))
     with open(store_path+'/'+now[:10]+'_'+topic+'.log', 'a') as f:
             f.write(now+' '+key+' '+val+'\n')
 
 def itemInit(topic):
     if topic not in mon:
-        mon.update({topic : {'enable':'0', 'start':'', 'end':'', 'snooze': '', 'interval':'', 'checkedin':'', 'status':'', 'descr':'','timeout':'', 'reporter':'', 'url1':'', 'url2':''}})
+        mon.update({topic : {'enable':'0', 'start':'', 'end':'', 'snooze': '', 'interval':'', 'checkedin':'', 'status':'', 'descr':'','timeout':'', 'reporter':'', 'url1':'', 'url2':'','expected':''}})
 
 def itemUpdateStatus(topic, now, key, val, reporter):
     itemInit(topic)
-    mon[topic].update({'checkedin': now, 'status': key, 'desc': val, 'reporter': reporter})
+    mon[topic].update({'checkedin': now, 'status': key, 'descr': val, 'reporter': reporter})
     store(topic, now, key, val)
 
 def itemUpdateParams(topic, now, key, val):
@@ -55,16 +54,81 @@ def itemUpdateParams(topic, now, key, val):
 def getAlerts():
     out  = {}
     for item in mon:
-        if mon[item]['status'] != 'OK' \
-                or (mon[item]['status'] == 'INFO' and int(time.time())-int(mon[item]['checkedin']) <  info_seconds):
+        checkedin = dt.datetime.strptime(mon[item]['checkedin'], "%Y-%m-%d %H:%M:%S")
+        now = dt.datetime.today()
+        tnow = now.time()
+        try:
+            enable = int(mon[item]['enable'])
+        except:
+            enable = 0
 
-            out[item] = copy.deepcopy(mon[item])
-            out[item]['checkedin'] = str(time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(int(out[item]['checkedin']))))
+        try:
+            start = dt.datetime.strptime(mon[item]['start'],'%H:%M').time()
+        except:
+            start = dt.time.min
+
+        try:
+            end = dt.datetime.strptime(mon[item]['end'],'%H:%M').time()
+        except:
+            end = dt.time.max
+
+        try:
+            timeout = int(mon[item]['timeout'])
+        except:
+            timeout = 86400
+
+        if end > tnow and tnow > start and enable == True:
+            if mon[item]['status'] in ('WARN','ERROR'):
+                out[item] = copy.deepcopy(mon[item])
+            elif mon[item]['status'] == 'OK':
+                if (now - checkedin).seconds > timeout:
+                    out[item] = copy.deepcopy(mon[item])
+                    out[item]['status'] = 'STALE'
+
+        elif mon[item]['status'] == 'INFO':
+            if (now - checkedin).seconds < info_seconds:
+                out[item] = copy.deepcopy(mon[item])
 
     out = header + json.dumps(out, indent=4, sort_keys=True) + '\n'
     return out
 
+def getEnabled():
+    out  = {}
+    for item in mon:
+        try:
+            enable = int(mon[item]['enable'])
+        except:
+            enable = 0
+
+        if enable == True:
+           out[item] = copy.deepcopy(mon[item])
+out = header + json.dumps(out, indent=4, sort_keys=True) + '\n'
+    return out
+
+def getDisabled():
+    out  = {}
+    for item in mon:
+        try:
+            enable = int(mon[item]['enable'])
+        except:
+            enable = 0
+
+        if enable == False:
+           out[item] = copy.deepcopy(mon[item])
+
+    out = header + json.dumps(out, indent=4, sort_keys=True) + '\n'
+    return out
+
+def getItem(item):
+    out  = {}
+    out[item] = copy.deepcopy(mon[item])
+    out = header + json.dumps(out, indent=4, sort_keys=True) + '\n'
+    return out
+
 class Server(asyncio.Protocol):
+
+    def connection_lost(self, exc):
+        self.transport.close()
 
     def connection_made(self, transport):
         self.transport = transport
@@ -72,7 +136,7 @@ class Server(asyncio.Protocol):
 
     def data_received(self, data):
         global mon
-        self.now = str(int(time.time()))
+        self.now = str(dt.datetime.today())[:19]
         try:
             self.msg = data.decode().strip('\r\n').split(' ', 2)
             self.empty = [''] * (3 - len(self.msg) )
@@ -84,12 +148,21 @@ class Server(asyncio.Protocol):
         if self.key in ['INFO','ERROR','WARN','OK']:
             itemUpdateStatus(self.topic, self.now, self.key, self.val, self.reporter)
 
-        elif self.key in ['enable','start','end','snooze','interval','timeout','descr','url1','url2']:
+        elif self.key in ['enable','start','end','snooze','interval','timeout','descr','url1','url2','expected']:
             itemUpdateParams(self.topic, self.now, self.key, self.val)
 
         elif self.topic in ['GET']:
             if self.key == '/':
                 self.out = getAlerts()
+                self.transport.write(self.out.encode())
+            elif self.key.strip('/') == 'enabled':
+                self.out = getEnabled()
+                self.transport.write(self.out.encode())
+            elif self.key.strip('/') == 'disabled':
+                self.out = getDisabled()
+                self.transport.write(self.out.encode())
+            elif self.key.strip('/') in mon:
+                self.out = getItem(self.key.strip('/'))
                 self.transport.write(self.out.encode())
             else:
                 try:
@@ -101,7 +174,7 @@ class Server(asyncio.Protocol):
                     return
 
                 if self.topic in mon:
-                    if self.key in ['enable','start','end','snooze','interval','timeout','descr','url1','url2']:
+                    if self.key in ['enable','start','end','snooze','interval','timeout','descr','url1','url2','expected']:
                         itemUpdateParams(self.topic, self.now, self.key, self.val)
                         self.out = header + json.dumps({'status': 'ok'}, indent=4, sort_keys=True) + '\n'
                         self.transport.write(self.out.encode())
@@ -117,7 +190,6 @@ class Server(asyncio.Protocol):
                     self.out = header + json.dumps({'status': 'error'}, indent=4, sort_keys=True) + '\n'
                     self.transport.write(self.out.encode())
         self.transport.close()
-
 
 if __name__ == '__main__':
     mon = loadSettings()
